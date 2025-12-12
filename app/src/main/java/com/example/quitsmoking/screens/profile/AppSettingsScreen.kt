@@ -1,0 +1,265 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+package com.example.quitsmoking.screens.profile
+
+import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+
+private const val TAG = "APP_SETTINGS_SAFE"
+
+@Composable
+fun AppSettingsScreen(navController: NavController) {
+    var darkMode by remember { mutableStateOf(false) }
+    var notifications by remember { mutableStateOf(true) }
+    var soundEffects by remember { mutableStateOf(true) }
+    var hapticFeedback by remember { mutableStateOf(true) }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("App Settings") },
+                navigationIcon = {
+                    IconButton(onClick = { safePop(navController) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        },
+        bottomBar = {
+            // simpler bottom bar wrapper to avoid layout/elevation issues
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(12.dp)
+            ) {
+                Button(
+                    onClick = { safePop(navController) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Save Changes")
+                }
+            }
+        }
+    ) { contentPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            Text("Customize your experience", color = Color.Gray, fontSize = 14.sp)
+            Spacer(Modifier.height(16.dp))
+
+            SectionHeader("Appearance")
+            SettingsToggleItem(
+                title = "Dark Mode",
+                subtitle = "Easier on the eyes",
+                icon = Icons.Default.DarkMode,
+                bgColor = Color(0xFFEEF2FF),
+                tint = Color(0xFF4338CA),
+                isOn = darkMode,
+                onToggle = { darkMode = !darkMode }
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            SectionHeader("Notifications")
+            SettingsToggleItem(
+                title = "Push Notifications",
+                subtitle = "Stay updated",
+                icon = Icons.Default.Notifications,
+                bgColor = Color(0xFFDBEAFE),
+                tint = Color(0xFF1D4ED8),
+                isOn = notifications,
+                onToggle = { notifications = !notifications }
+            )
+            SettingsNavigationItem(
+                title = "Notification Preferences",
+                onClick = { safeNavigate(navController, "notification_settings") }
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            SectionHeader("Preferences")
+            SettingsToggleItem(
+                title = "Sound Effects",
+                subtitle = "Audio feedback",
+                icon = Icons.Default.Smartphone,
+                bgColor = Color(0xFFEDE9FE),
+                tint = Color(0xFF6D28D9),
+                isOn = soundEffects,
+                onToggle = { soundEffects = !soundEffects }
+            )
+            SettingsToggleItem(
+                title = "Haptic Feedback",
+                subtitle = "Vibration feedback",
+                icon = Icons.Default.Smartphone,
+                bgColor = Color(0xFFFCE7F3),
+                tint = Color(0xFFBE185D),
+                isOn = hapticFeedback,
+                onToggle = { hapticFeedback = !hapticFeedback }
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            SectionHeader("Other")
+            SettingsNavigationItem(
+                title = "Privacy & Security",
+                subtitle = "Your data protection",
+                icon = Icons.Default.Lock,
+                bgColor = Color(0xFFFEE2E2),
+                tint = Color(0xFFDC2626),
+                onClick = { safeNavigate(navController, "privacy") }
+            )
+            SettingsNavigationItem(
+                title = "Language",
+                subtitle = "English",
+                icon = Icons.Default.Language,
+                bgColor = Color(0xFFD1FAE5),
+                tint = Color(0xFF059669),
+                onClick = { /* language chooser */ }
+            )
+
+            Spacer(Modifier.height(80.dp))
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 16.sp,
+        color = Color(0xFF6B7280),
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun IconCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, bg: Color, tint: Color) {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = tint)
+    }
+}
+
+@Composable
+private fun SettingsToggleItem(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    bgColor: Color,
+    tint: Color,
+    isOn: Boolean,
+    onToggle: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconCircle(icon, bgColor, tint)
+            Spacer(Modifier.width(16.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onToggle() }
+            ) {
+                Text(title, fontSize = 16.sp)
+                Text(subtitle, fontSize = 13.sp, color = Color.Gray)
+            }
+            Switch(checked = isOn, onCheckedChange = { onToggle() })
+        }
+    }
+}
+
+@Composable
+private fun SettingsNavigationItem(
+    title: String,
+    subtitle: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    bgColor: Color = Color.LightGray,
+    tint: Color = Color.DarkGray,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                IconCircle(icon, bgColor, tint)
+                Spacer(Modifier.width(16.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 16.sp)
+                if (subtitle != null) Text(subtitle, fontSize = 13.sp, color = Color.Gray)
+            }
+            Text("→", color = Color.Gray, fontSize = 20.sp)
+        }
+    }
+}
+
+/** defensive nav helpers */
+private fun safeNavigate(navController: NavController, route: String) {
+    try {
+        navController.navigate(route)
+    } catch (e: Exception) {
+        Log.e(TAG, "navigate failed: $route", e)
+    }
+}
+
+private fun safePop(navController: NavController) {
+    try {
+        navController.popBackStack()
+    } catch (e: Exception) {
+        Log.e(TAG, "pop failed", e)
+    }
+}
