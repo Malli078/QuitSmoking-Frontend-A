@@ -1,5 +1,6 @@
 package com.example.quitsmoking.screens
 
+import android.content.Context
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,13 +36,40 @@ fun LoginScreen(navController: NavController) {
     val context = LocalContext.current
     val viewModel: LoginViewModel = viewModel()
 
+    // SharedPreferences for Remember Me
+    val prefs = context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var rememberMe by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf("") }
+
+    // ✅ Load saved credentials when screen starts
+    LaunchedEffect(Unit) {
+        val savedEmail = prefs.getString("email", "")
+        val savedPassword = prefs.getString("password", "")
+        val remember = prefs.getBoolean("remember", false)
+        if (remember && !savedEmail.isNullOrEmpty() && !savedPassword.isNullOrEmpty()) {
+            email = savedEmail
+            password = savedPassword
+            rememberMe = true
+        }
+    }
 
     // ✅ Navigate when success
     LaunchedEffect(viewModel.success.value) {
         if (viewModel.success.value) {
+            // Save credentials if Remember Me is checked
+            if (rememberMe) {
+                prefs.edit()
+                    .putString("email", email)
+                    .putString("password", password)
+                    .putBoolean("remember", true)
+                    .apply()
+            } else {
+                prefs.edit().clear().apply()
+            }
+
             navController.navigate("home") {
                 popUpTo("login") { inclusive = true }
             }
@@ -82,7 +110,7 @@ fun LoginScreen(navController: NavController) {
             contentScale = ContentScale.Crop
         )
 
-        // 💨 Frosted Glass Box for Login Form
+        // 💨 Frosted Glass Box
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
@@ -95,7 +123,7 @@ fun LoginScreen(navController: NavController) {
                         )
                     )
                 )
-                .blur(0.dp) // smoke effect
+                .blur(0.dp)
                 .padding(24.dp)
         ) {
             Column(
@@ -109,7 +137,6 @@ fun LoginScreen(navController: NavController) {
                         .size(100.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.5f))
-                        .blur(0.dp)
                         .padding(6.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -161,8 +188,25 @@ fun LoginScreen(navController: NavController) {
                     textStyle = LocalTextStyle.current.copy(color = Color.Black)
                 )
 
-                Spacer(Modifier.height(8.dp))
+                // ✅ Remember Me checkbox
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = rememberMe,
+                        onCheckedChange = { rememberMe = it }
+                    )
+                    Text(
+                        text = "Remember Me",
+                        color = Color.Black,
+                        fontSize = 16.sp
+                    )
+                }
 
+                // Forgot password
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -176,6 +220,7 @@ fun LoginScreen(navController: NavController) {
                     )
                 }
 
+                // Error text
                 val errorText = if (localError.isNotEmpty()) localError else viewModel.error.value
                 if (errorText.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
