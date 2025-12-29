@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.remember
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,9 +31,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             QuitSmokingAppTheme {
+                val userId = remember { 3 }
                 Surface(color = MaterialTheme.colorScheme.background) {
                     val navController = rememberNavController()
                     NavHost(
+
                         navController = navController,
                         startDestination = "splash"
                     ) {
@@ -50,6 +53,22 @@ class MainActivity : ComponentActivity() {
                         composable("forgot_password") {
                             com.example.quitsmoking.screens.ForgotPasswordScreen(navController)
                         }
+                        // ---------- RESET PASSWORD (ADD THIS ONLY) ----------
+                        composable(
+                            route = "reset_password/{email}",
+                            arguments = listOf(
+                                androidx.navigation.navArgument("email") {
+                                    type = androidx.navigation.NavType.StringType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val email = backStackEntry.arguments?.getString("email") ?: ""
+                            com.example.quitsmoking.screens.ResetPasswordScreen(
+                                navController = navController,
+                                email = email
+                            )
+                        }
+
                         composable("create_account") {
                             com.example.quitsmoking.screens.CreateAccountScreen(navController)
                         }
@@ -123,23 +142,52 @@ class MainActivity : ComponentActivity() {
                             com.example.quitsmoking.screens.home.TodaysGoalScreen(navController)
                         }
                         // ---------- STREAK CALENDAR ----------
+                        // ---------- STREAK CALENDAR ----------
                         composable("streak_calendar") {
-                            com.example.quitsmoking.screens.progress.StreakCalendarScreen(navController)
+                            com.example.quitsmoking.screens.progress.StreakCalendarScreen(
+                                navController = navController
+                            )
                         }
-                        // ---------- ACHIEVEMENTS ----------
-                        composable("achievements") {
-                            com.example.quitsmoking.screens.progress.AchievementsScreen(navController)
+
+// ---------- MONEY SAVED ----------
+                        composable("money_saved") {
+                            com.example.quitsmoking.screens.progress.MoneySavedScreen(
+                                navController = navController
+                            )
                         }
-                        // ---------- MONEY SAVED ----------
-                        composable("money-saved") {
-                            com.example.quitsmoking.screens.progress.MoneySavedScreen(navController)
-                        }
-                        // ---------- MILESTONE CELEBRATION ----------
-                        composable("milestone-celebration") {
+
+// ---------- MILESTONE ----------
+                        composable("milestone") {
                             com.example.quitsmoking.screens.progress.MilestoneCelebrationScreen(
                                 navController = navController
                             )
                         }
+
+// ---------- ACHIEVEMENTS ----------
+                        composable("achievements") {
+                            com.example.quitsmoking.screens.progress.AchievementsScreen(
+                                navController = navController
+                            )
+                        }
+
+                        // ---------- HELP TOPIC DETAIL ----------
+                        composable(
+                            route = "help_topic/{id}",
+                            arguments = listOf(
+                                androidx.navigation.navArgument("id") {
+                                    type = androidx.navigation.NavType.StringType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val id = backStackEntry.arguments?.getString("id")
+
+                            // TEMP PLACEHOLDER (SAFE)
+                            AppSimplePlaceholder(
+                                text = "Help Topic ID: $id",
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
                         // ---------- PROFILE ----------
                         composable("profile") {
                             com.example.quitsmoking.screens.profile.ProfileScreen(navController)

@@ -1,41 +1,70 @@
 package com.example.quitsmoking.screens.profile
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
+import com.example.quitsmoking.model.NotificationSettings
+import com.example.quitsmoking.viewmodel.NotificationSettingsViewModel
 
 @Composable
 fun NotificationSettingsScreen(
     navController: NavController,
-    initialPush: Boolean = true,
-    initialMilestones: Boolean = true,
-    initialDailyReminder: Boolean = true,
-    initialEmail: Boolean = true,
-    initialSound: Boolean = true,
-    initialVibrate: Boolean = true,
-    initialDndStart: String = "22:00",
-    initialDndEnd: String = "07:00"
+    viewModel: NotificationSettingsViewModel = viewModel()
 ) {
-    var pushEnabled by remember { mutableStateOf(initialPush) }
-    var milestoneEnabled by remember { mutableStateOf(initialMilestones) }
-    var dailyReminderEnabled by remember { mutableStateOf(initialDailyReminder) }
-    var emailEnabled by remember { mutableStateOf(initialEmail) }
-    var soundEnabled by remember { mutableStateOf(initialSound) }
-    var vibrateEnabled by remember { mutableStateOf(initialVibrate) }
-    var dndStart by remember { mutableStateOf(initialDndStart) }
-    var dndEnd by remember { mutableStateOf(initialDndEnd) }
+    val context = LocalContext.current
+
+    // 🔐 USER ID
+    val userPrefs =
+        context.getSharedPreferences("user_profile", Context.MODE_PRIVATE)
+    val userId = userPrefs.getInt("user_id", 0)
+
+    val settings by viewModel.settings.collectAsState()
+    val loading by viewModel.loading.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    // UI STATE
+    var pushEnabled by remember { mutableStateOf(true) }
+    var milestoneEnabled by remember { mutableStateOf(true) }
+    var dailyReminderEnabled by remember { mutableStateOf(true) }
+    var emailEnabled by remember { mutableStateOf(true) }
+    var soundEnabled by remember { mutableStateOf(true) }
+    var vibrateEnabled by remember { mutableStateOf(true) }
+    var dndStart by remember { mutableStateOf("22:00") }
+    var dndEnd by remember { mutableStateOf("07:00") }
+
+    // 🔄 LOAD FROM BACKEND
+    LaunchedEffect(Unit) {
+        viewModel.loadSettings(userId)
+    }
+
+    // 🔁 UPDATE UI WHEN DATA ARRIVES
+    LaunchedEffect(settings) {
+        settings?.let {
+            pushEnabled = it.push_enabled == 1
+            milestoneEnabled = it.milestone_enabled == 1
+            dailyReminderEnabled = it.daily_reminder_enabled == 1
+            emailEnabled = it.email_enabled == 1
+            soundEnabled = it.sound_enabled == 1
+            vibrateEnabled = it.vibrate_enabled == 1
+            dndStart = it.dnd_start
+            dndEnd = it.dnd_end
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -51,8 +80,7 @@ fun NotificationSettingsScreen(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Notification Settings",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 4.dp)
+                    style = MaterialTheme.typography.titleLarge
                 )
             }
         },
@@ -66,26 +94,48 @@ fun NotificationSettingsScreen(
                 ) {
                     Button(
                         onClick = {
-                            // Save changes — placeholder
-                            navController.popBackStack()
+                            viewModel.saveSettings(
+                                userId,
+                                NotificationSettings(
+                                    push_enabled = if (pushEnabled) 1 else 0,
+                                    milestone_enabled = if (milestoneEnabled) 1 else 0,
+                                    daily_reminder_enabled = if (dailyReminderEnabled) 1 else 0,
+                                    email_enabled = if (emailEnabled) 1 else 0,
+                                    sound_enabled = if (soundEnabled) 1 else 0,
+                                    vibrate_enabled = if (vibrateEnabled) 1 else 0,
+                                    dnd_start = dndStart,
+                                    dnd_end = dndEnd
+                                )
+                            ) {
+                                navController.popBackStack()
+                            }
                         },
+                        enabled = !loading,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
                     ) {
-                        Text("Save Changes")
+                        if (loading) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            Text("Save Changes")
+                        }
                     }
+
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Tip: You can also control notifications in the system settings.",
+                        text = "Tip: You can also control notifications in system settings.",
                         color = Color.Gray,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                        fontSize = 12.sp
                     )
                 }
             }
         }
     ) { innerPadding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -93,59 +143,100 @@ fun NotificationSettingsScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+
+            if (error != null) {
+                Text(error!!, color = Color.Red)
+                Spacer(Modifier.height(12.dp))
+            }
+
+            SettingRow(
+                "Push Notifications",
+                "Receive push notifications on this device",
+                pushEnabled
+            ) { pushEnabled = it }
+
+            Spacer(Modifier.height(12.dp))
+
+            SettingRow(
+                "Milestone Notifications",
+                "Celebrate milestones (1 day, 1 week, etc.)",
+                milestoneEnabled
+            ) { milestoneEnabled = it }
+
+            Spacer(Modifier.height(12.dp))
+
+            SettingRow(
+                "Daily Reminder",
+                "A daily check-in / motivation notification",
+                dailyReminderEnabled
+            ) { dailyReminderEnabled = it }
+
+            Spacer(Modifier.height(12.dp))
+
+            SettingRow(
+                "Email Notifications",
+                "Receive occasional emails",
+                emailEnabled
+            ) { emailEnabled = it }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text("Sound & Vibration", style = MaterialTheme.typography.titleMedium)
+
+            Spacer(Modifier.height(8.dp))
+
+            SettingRow(
+                "Sound",
+                "Play a sound when receiving notifications",
+                soundEnabled
+            ) { soundEnabled = it }
+
+            Spacer(Modifier.height(8.dp))
+
+            SettingRow(
+                "Vibrate",
+                "Vibrate on notification",
+                vibrateEnabled
+            ) { vibrateEnabled = it }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text("Do Not Disturb", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "Control how and when you receive alerts from the app.",
+                "Notifications will be silenced between the times below.",
                 color = Color.Gray,
-                modifier = Modifier.padding(bottom = 12.dp)
+                fontSize = 13.sp
             )
 
-            SettingRow("Push Notifications", "Receive push notifications on this device", pushEnabled) { pushEnabled = it }
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingRow("Milestone Notifications", "Celebrate milestones (1 day, 1 week, etc.)", milestoneEnabled) { milestoneEnabled = it }
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingRow("Daily Reminder", "A daily check-in / motivation notification", dailyReminderEnabled) { dailyReminderEnabled = it }
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingRow("Email Notifications", "Receive occasional emails (tips, reports)", emailEnabled) { emailEnabled = it }
+            Spacer(Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(text = "Sound & Vibration", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingRow("Sound", "Play a sound when receiving notifications", soundEnabled) { soundEnabled = it }
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingRow("Vibrate", "Vibrate on notification", vibrateEnabled) { vibrateEnabled = it }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(text = "Do Not Disturb", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Notifications will be silenced between the times below.", color = Color.Gray, fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = dndStart,
                     onValueChange = { dndStart = it },
                     label = { Text("From") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    supportingText = { Text("HH:mm") }
+                    modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
                     value = dndEnd,
                     onValueChange = { dndEnd = it },
                     label = { Text("To") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    supportingText = { Text("HH:mm") }
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(200.dp))
+            Spacer(Modifier.height(200.dp))
         }
     }
 }
 
 @Composable
-private fun SettingRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SettingRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -155,9 +246,9 @@ private fun SettingRow(title: String, subtitle: String, checked: Boolean, onChec
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = subtitle, color = Color.Gray, fontSize = 13.sp)
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(4.dp))
+            Text(subtitle, color = Color.Gray, fontSize = 13.sp)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }

@@ -3,9 +3,11 @@
 package com.example.quitsmoking.screens.profile
 
 import android.Manifest
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,232 +39,237 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import java.io.InputStream
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 
-/* -------------------------
-   Helper: decode InputStream → Bitmap
-   ------------------------- */
-fun loadBitmapFromUri(stream: InputStream?): Bitmap? {
-    return try {
-        stream.use { s ->
-            BitmapFactory.decodeStream(s)
+/* ---------------- Bitmap Helpers ---------------- */
+
+private fun bitmapFromUri(context: Context, uri: Uri): Bitmap? =
+    try {
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it)
         }
     } catch (e: Exception) {
-        e.printStackTrace()
         null
     }
+
+private fun bitmapToBase64(bitmap: Bitmap): String {
+    val output = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+    return Base64.encodeToString(output.toByteArray(), Base64.DEFAULT)
 }
 
-/* -------------------------
-   Data models & helpers
-   ------------------------- */
-data class UserProfile(
-    val name: String? = null,
-    val email: String? = null,
-    val quitDate: String? = null,
-    val cigarettesPerDay: Int? = null,
-    val costPerPack: Double? = null
-)
+private fun base64ToBitmap(encoded: String): Bitmap? =
+    try {
+        val bytes = Base64.decode(encoded, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (e: Exception) {
+        null
+    }
 
-private data class MenuItem(
-    val id: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val label: String,
-    val route: String,
-    val bgColor: Color,
-    val iconTint: Color
-)
+/* ---------------- Profile Screen ---------------- */
 
-private fun roundSavedMoney(days: Int, cigarettesPerDay: Int, costPerPack: Double): Int {
-    val cigarettesAvoided = days * cigarettesPerDay
-    val packsAvoided = cigarettesAvoided / 20.0
-    return (packsAvoided * costPerPack).toInt()
-}
-
-/* -------------------------
-   Full ProfileScreen (paste into file)
-   ------------------------- */
 @Composable
 fun ProfileScreen(
     navController: NavController,
-    user: UserProfile? = null,
     appVersion: String = "QuitSmart v1.0.0"
 ) {
     val context = LocalContext.current
 
-    // avatar state
+    val userPrefs = context.getSharedPreferences("user_profile", Context.MODE_PRIVATE)
+    val habitPrefs = context.getSharedPreferences("user_habits", Context.MODE_PRIVATE)
+
+    var userName by remember { mutableStateOf("User") }
+    var userEmail by remember { mutableStateOf("user@example.com") }
+    var quitDateString by remember { mutableStateOf<String?>(null) }
+
+    var cigarettesPerDay by remember { mutableStateOf(0) }
+    var cigarettesPerPack by remember { mutableStateOf(20) }
+    var costPerPack by remember { mutableStateOf(0) }
+
     var avatarBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showChooser by remember { mutableStateOf(false) }
-
-    // logout confirmation dialog state
     var showLogoutDialog by remember { mutableStateOf(false) }
 
-    // camera launcher (declared before use)
-    val cameraLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
-            bitmap?.let { avatarBitmap = it }
-            showChooser = false
-        }
+    /* ---------- Load Stored Data ---------- */
+    LaunchedEffect(Unit) {
+        userName = userPrefs.getString("name", "User") ?: "User"
+        userEmail = userPrefs.getString("email", "user@example.com") ?: "user@example.com"
+        quitDateString = userPrefs.getString("quit_date", null)
 
-    // gallery launcher
+        cigarettesPerDay = habitPrefs.getInt("cigarettes_per_day", 0)
+        cigarettesPerPack = habitPrefs.getInt("cigarettes_per_pack", 20)
+        costPerPack = habitPrefs.getInt("cost_per_pack", 0)
+
+        userPrefs.getString("avatar_base64", null)?.let {
+            avatarBitmap = base64ToBitmap(it)
+        }
+    }
+
+    /* ---------- Calculations ---------- */
+    val daysQuit = remember(quitDateString) {
+        if (quitDateString == null) 0 else try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val quitDate = sdf.parse(quitDateString!!)
+            val diff = Date().time - (quitDate?.time ?: Date().time)
+            maxOf(0, (diff / (1000 * 60 * 60 * 24)).toInt())
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    val milestoneDays = listOf(1, 3, 7, 14, 30, 90, 365)
+    val badges = milestoneDays.count { daysQuit >= it }
+
+    val dailySpend =
+        if (cigarettesPerPack > 0)
+            (cigarettesPerDay.toDouble() / cigarettesPerPack) * costPerPack
+        else 0.0
+
+    val moneySaved = (dailySpend * daysQuit).toInt()
+
+    /* ---------- Image Pickers ---------- */
+
     val galleryLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
-                val bmp = loadBitmapFromUri(context.contentResolver.openInputStream(uri))
-                if (bmp != null) avatarBitmap = bmp
+                bitmapFromUri(context, it)?.let { bmp ->
+                    avatarBitmap = bmp
+                    userPrefs.edit()
+                        .putString("avatar_base64", bitmapToBase64(bmp))
+                        .apply()
+                }
             }
             showChooser = false
         }
 
-    // permission launcher
-    val cameraPermissionLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted: Boolean ->
-            if (granted) cameraLauncher.launch(null)
+    val cameraLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
+            bmp?.let {
+                avatarBitmap = it
+                userPrefs.edit()
+                    .putString("avatar_base64", bitmapToBase64(it))
+                    .apply()
+            }
+            showChooser = false
+        }
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            if (it) cameraLauncher.launch(null)
             else Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show()
         }
 
-    // compute stats
-    val daysSinceQuit = try {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val quitDate = user?.quitDate?.let { sdf.parse(it) }
-        if (quitDate != null) {
-            val diff = Date().time - quitDate.time
-            (diff / (1000L * 60 * 60 * 24)).toInt()
-        } else 0
-    } catch (_: Exception) { 0 }
-
-    val cigarettesPerDay = user?.cigarettesPerDay ?: 10
-    val costPerPack = user?.costPerPack ?: 10.0
-    val moneySaved = roundSavedMoney(daysSinceQuit, cigarettesPerDay, costPerPack)
+    /* ---------- Menu Items ---------- */
 
     val menuItems = listOf(
-        MenuItem("edit", Icons.Default.Person, "Edit Personal Information", "edit_profile", Color(0xFFDBEAFE), Color(0xFF2563EB)),
-        MenuItem("habit", Icons.Default.CalendarMonth, "Habit Settings", "habit_settings", Color(0xFFF3E8FF), Color(0xFF7C3AED)),
-        MenuItem("quit-plan", Icons.Default.Settings, "Quit Plan Settings", "quit_plan_settings", Color(0xFFDCFCE7), Color(0xFF059669)),
-        MenuItem("notifications", Icons.Default.Notifications, "Notification Settings", "notification_settings", Color(0xFFFFF7ED), Color(0xFFF59E0B)),
-        MenuItem("app-settings", Icons.Default.Settings, "App Settings", "app_settings", Color(0xFFF3F4F6), Color(0xFF6B7280)),
-        MenuItem("privacy", Icons.Default.Security, "Privacy & Security", "privacy", Color(0xFFECFEFA), Color(0xFF0EA5A3)),
-        MenuItem("help", Icons.AutoMirrored.Filled.Help, "Help & Support", "help_support", Color(0xFFEFF6FF), Color(0xFF6366F1)),
+        MenuItem(Icons.Default.Person, "Edit Personal Information", "edit_profile"),
+        MenuItem(Icons.Default.CalendarMonth, "Habit Settings", "habit_settings"),
+        MenuItem(Icons.Default.Settings, "Quit Plan Settings", "quit_plan_settings"),
+        MenuItem(Icons.Default.Notifications, "Notification Settings", "notification_settings"),
+        MenuItem(Icons.Default.Settings, "App Settings", "app_settings"),
+        MenuItem(Icons.Default.Security, "Privacy & Security", "privacy"),
+        MenuItem(Icons.AutoMirrored.Filled.Help, "Help & Support", "help_support")
     )
+
+    /* ---------------- UI ---------------- */
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFB)),
-        contentPadding = PaddingValues(bottom = 24.dp)
+            .background(Color(0xFFF5F6F8))
     ) {
+
+        /* ---------- Header ---------- */
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(170.dp)
                     .background(
                         Brush.horizontalGradient(
                             listOf(Color(0xFF10B981), Color(0xFF059669))
                         )
                     )
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .padding(16.dp)
             ) {
-                // back button
-                IconButton(
-                    onClick = { navController.navigate("home") },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+
+                IconButton(onClick = { navController.navigate("home") }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                 }
 
-                Column {
-                    Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Avatar (image or placeholder) with + badge
-                        Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
-                            if (avatarBitmap != null) {
-                                Image(
-                                    bitmap = avatarBitmap!!.asImageBitmap(),
-                                    contentDescription = "Profile",
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.Person, contentDescription = "Avatar", tint = Color(0xFF059669), modifier = Modifier.size(32.dp))
-                                }
-                            }
-
-                            // + badge (opens chooser)
+                    Box(modifier = Modifier.size(72.dp)) {
+                        if (avatarBitmap != null) {
+                            Image(
+                                bitmap = avatarBitmap!!.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .fillMaxSize()
                                     .clip(CircleShape)
-                                    .background(Color(0xFF059669))
-                                    .align(Alignment.BottomEnd)
-                                    .offset(4.dp, 4.dp)
-                                    .clickable { showChooser = true },
+                                    .background(Color.White),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("+", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Person, null, tint = Color(0xFF059669))
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text(user?.name ?: "User", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Email, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(user?.email ?: "user@example.com", color = Color.White.copy(alpha = 0.95f))
-                            }
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF059669))
+                                .align(Alignment.BottomEnd)
+                                .clickable { showChooser = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", color = Color.White, fontSize = 14.sp)
                         }
                     }
-                }
-            }
 
-            // Stats card overlapping header
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .offset(y = (-28).dp),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("$daysSinceQuit", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Days Quit", fontSize = 12.sp, color = Color.Gray)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("12", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Badges", fontSize = 12.sp, color = Color.Gray)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("$$moneySaved", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Saved", fontSize = 12.sp, color = Color.Gray)
+                    Spacer(Modifier.width(12.dp))
+
+                    Column {
+                        Text(userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(userEmail, color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Menu items: FORCE WHITE background for every card
+        /* ---------- Stats Card ---------- */
+        item {
+            Card(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .offset(y = (-28).dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(Color.White)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(daysQuit.toString(), "Days Quit")
+                    StatItem(badges.toString(), "Badges")
+                    StatItem("₹$moneySaved", "Saved")
+                }
+            }
+        }
+
+        /* ---------- Menu ---------- */
         items(menuItems) { item ->
             Card(
                 modifier = Modifier
@@ -270,82 +277,76 @@ fun ProfileScreen(
                     .padding(horizontal = 16.dp, vertical = 6.dp)
                     .clickable { navController.navigate(item.route) },
                 shape = RoundedCornerShape(14.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), // remove heavy shadow
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White,           // FORCE white background
-                    contentColor = Color(0xFF111827)       // default dark text color
-                )
+                colors = CardDefaults.cardColors(Color.White)
             ) {
-                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier.size(48.dp).clip(CircleShape).background(item.bgColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(item.icon, contentDescription = item.label, tint = item.iconTint)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = item.label, modifier = Modifier.weight(1f), color = Color(0xFF111827))
-                    Icon(Icons.Default.ChevronRight, contentDescription = "Next", tint = Color(0xFF9CA3AF))
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(item.icon, null, tint = Color.Black)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = item.label,
+                        modifier = Modifier.weight(1f),
+                        color = Color.Black
+                    )
+                    Icon(Icons.Default.ChevronRight, null, tint = Color.Black)
                 }
             }
         }
 
-        // Logout & app version — also white
+        /* ---------- Logout ---------- */
         item {
-            Spacer(modifier = Modifier.height(12.dp))
-
+            Spacer(Modifier.height(12.dp))
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .clickable {
-                        // show confirmation dialog instead of immediate logout
-                        showLogoutDialog = true
-                    },
-                shape = RoundedCornerShape(14.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF111827))
+                    .clickable { showLogoutDialog = true },
+                colors = CardDefaults.cardColors(Color.White)
             ) {
-                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFFFE9E9)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = Color(0xFFDC2626))
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Log Out", modifier = Modifier.weight(1f), color = Color(0xFFDC2626), fontWeight = FontWeight.SemiBold)
-                    Icon(Icons.Default.ChevronRight, contentDescription = "Next", tint = Color(0xFFFCA5A5))
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.Red)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Log Out", color = Color.Red, fontWeight = FontWeight.Bold)
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
+            Spacer(Modifier.height(16.dp))
             Text(
                 appVersion,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
-                fontSize = 12.sp,
                 color = Color.Gray
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 
-    // Image chooser dialog
+    /* ---------- Image Chooser ---------- */
     if (showChooser) {
         AlertDialog(
             onDismissRequest = { showChooser = false },
+            title = { Text("Set profile photo") },
             confirmButton = {
-                TextButton(onClick = { galleryLauncher.launch("image/*") }) { Text("Gallery") }
+                TextButton(onClick = { galleryLauncher.launch("image/*") }) {
+                    Text("Gallery")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) { Text("Camera") }
-            },
-            title = { Text("Set profile photo") },
-            text = { Text("Choose from gallery or take a picture.") }
+                TextButton(onClick = {
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                }) {
+                    Text("Camera")
+                }
+            }
         )
     }
 
-    // Logout confirmation dialog
+    /* ---------- Logout Dialog ---------- */
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -353,14 +354,12 @@ fun ProfileScreen(
             text = { Text("Are you sure you want to log out?") },
             confirmButton = {
                 TextButton(onClick = {
-                    showLogoutDialog = false
-                    // perform logout: navigate to login and clear back stack
+                    userPrefs.edit().clear().apply()
                     navController.navigate("login") {
                         popUpTo(navController.graph.id) { inclusive = true }
-                        launchSingleTop = true
                     }
                 }) {
-                    Text("Log Out", color = Color(0xFFDC2626))
+                    Text("Log Out", color = Color.Red)
                 }
             },
             dismissButton = {
@@ -372,4 +371,26 @@ fun ProfileScreen(
     }
 }
 
+/* ---------------- Helpers ---------------- */
 
+@Composable
+private fun StatItem(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = Color.Gray
+        )
+    }
+}
+
+private data class MenuItem(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val label: String,
+    val route: String
+)

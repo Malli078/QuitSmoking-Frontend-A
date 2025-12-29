@@ -1,7 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.quitsmoking.screens.profile
 
+import android.content.Context
 import android.util.Log
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,26 +14,40 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 
 private const val TAG = "APP_SETTINGS_SAFE"
 
+/* ---------------- DARK MODE HELPER ---------------- */
+private fun applyDarkMode(enabled: Boolean) {
+    AppCompatDelegate.setDefaultNightMode(
+        if (enabled)
+            AppCompatDelegate.MODE_NIGHT_YES
+        else
+            AppCompatDelegate.MODE_NIGHT_NO
+    )
+}
+
+/* ---------------- SCREEN ---------------- */
 @Composable
 fun AppSettingsScreen(navController: NavController) {
-    var darkMode by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+
+    // Load saved value
+    val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+    var darkMode by remember { mutableStateOf(prefs.getBoolean("dark_mode", false)) }
+
     var notifications by remember { mutableStateOf(true) }
     var soundEffects by remember { mutableStateOf(true) }
     var hapticFeedback by remember { mutableStateOf(true) }
@@ -43,14 +60,10 @@ fun AppSettingsScreen(navController: NavController) {
                     IconButton(onClick = { safePop(navController) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
         },
         bottomBar = {
-            // simpler bottom bar wrapper to avoid layout/elevation issues
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -58,7 +71,17 @@ fun AppSettingsScreen(navController: NavController) {
                     .padding(12.dp)
             ) {
                 Button(
-                    onClick = { safePop(navController) },
+                    onClick = {
+                        // 🌙 APPLY REAL DARK MODE
+                        applyDarkMode(darkMode)
+
+                        // 💾 SAVE LOCALLY
+                        prefs.edit()
+                            .putBoolean("dark_mode", darkMode)
+                            .apply()
+
+                        safePop(navController)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
@@ -68,18 +91,21 @@ fun AppSettingsScreen(navController: NavController) {
                 }
             }
         }
-    ) { contentPadding ->
+    ) { padding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(contentPadding)
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+
             Text("Customize your experience", color = Color.Gray, fontSize = 14.sp)
             Spacer(Modifier.height(16.dp))
 
             SectionHeader("Appearance")
+
             SettingsToggleItem(
                 title = "Dark Mode",
                 subtitle = "Easier on the eyes",
@@ -91,8 +117,8 @@ fun AppSettingsScreen(navController: NavController) {
             )
 
             Spacer(Modifier.height(20.dp))
-
             SectionHeader("Notifications")
+
             SettingsToggleItem(
                 title = "Push Notifications",
                 subtitle = "Stay updated",
@@ -102,14 +128,15 @@ fun AppSettingsScreen(navController: NavController) {
                 isOn = notifications,
                 onToggle = { notifications = !notifications }
             )
+
             SettingsNavigationItem(
                 title = "Notification Preferences",
                 onClick = { safeNavigate(navController, "notification_settings") }
             )
 
             Spacer(Modifier.height(20.dp))
-
             SectionHeader("Preferences")
+
             SettingsToggleItem(
                 title = "Sound Effects",
                 subtitle = "Audio feedback",
@@ -119,6 +146,7 @@ fun AppSettingsScreen(navController: NavController) {
                 isOn = soundEffects,
                 onToggle = { soundEffects = !soundEffects }
             )
+
             SettingsToggleItem(
                 title = "Haptic Feedback",
                 subtitle = "Vibration feedback",
@@ -130,8 +158,8 @@ fun AppSettingsScreen(navController: NavController) {
             )
 
             Spacer(Modifier.height(20.dp))
-
             SectionHeader("Other")
+
             SettingsNavigationItem(
                 title = "Privacy & Security",
                 subtitle = "Your data protection",
@@ -140,19 +168,22 @@ fun AppSettingsScreen(navController: NavController) {
                 tint = Color(0xFFDC2626),
                 onClick = { safeNavigate(navController, "privacy") }
             )
+
             SettingsNavigationItem(
                 title = "Language",
                 subtitle = "English",
                 icon = Icons.Default.Language,
                 bgColor = Color(0xFFD1FAE5),
                 tint = Color(0xFF059669),
-                onClick = { /* language chooser */ }
+                onClick = { }
             )
 
             Spacer(Modifier.height(80.dp))
         }
     }
 }
+
+/* ---------------- UI HELPERS ---------------- */
 
 @Composable
 private fun SectionHeader(title: String) {
@@ -191,8 +222,7 @@ private fun SettingsToggleItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -227,8 +257,7 @@ private fun SettingsNavigationItem(
             .fillMaxWidth()
             .padding(bottom = 8.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -240,14 +269,17 @@ private fun SettingsNavigationItem(
             }
             Column(Modifier.weight(1f)) {
                 Text(title, fontSize = 16.sp)
-                if (subtitle != null) Text(subtitle, fontSize = 13.sp, color = Color.Gray)
+                subtitle?.let {
+                    Text(it, fontSize = 13.sp, color = Color.Gray)
+                }
             }
             Text("→", color = Color.Gray, fontSize = 20.sp)
         }
     }
 }
 
-/** defensive nav helpers */
+/* ---------------- SAFE NAV HELPERS ---------------- */
+
 private fun safeNavigate(navController: NavController, route: String) {
     try {
         navController.navigate(route)

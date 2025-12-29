@@ -1,5 +1,7 @@
 package com.example.quitsmoking.screens.profile
 
+import android.app.DatePickerDialog
+import android.content.Context
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,61 +21,117 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.quitsmoking.screens.profile.UserProfile
+import com.example.quitsmoking.model.QuitMilestone
+import com.example.quitsmoking.viewmodel.QuitPlanViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-data class Milestone(val days: Int, val label: String, val enabled: Boolean)
+data class Milestone(
+    val days: Int,
+    val label: String,
+    val enabled: Boolean
+)
 
 @Composable
 fun QuitPlanSettingsScreen(
     navController: NavController,
-    user: UserProfile? = null
+    viewModel: QuitPlanViewModel = viewModel()
 ) {
-    val initial = listOf(
-        Milestone(1, "24 Hours", true),
-        Milestone(3, "3 Days", true),
-        Milestone(7, "1 Week", true),
-        Milestone(14, "2 Weeks", true),
-        Milestone(30, "1 Month", true),
-        Milestone(90, "3 Months", true),
-        Milestone(365, "1 Year", true),
+    val context = LocalContext.current
+
+    // 🔐 USER ID
+    val prefs = context.getSharedPreferences("user_profile", Context.MODE_PRIVATE)
+    val userId = prefs.getInt("user_id", 0)
+
+    // 🔄 BACKEND STATES
+    val quitDateFromBackend by viewModel.quitDate.collectAsState()
+    val backendMilestones by viewModel.milestones.collectAsState()
+    val loading by viewModel.loading.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    // 🗓️ QUIT DATE STATE
+    var selectedQuitDate by remember { mutableStateOf<String?>(null) }
+
+    // 📅 DATE PICKER
+    val calendar = Calendar.getInstance()
+    val datePickerDialog = DatePickerDialog(
+        context,
+        { _, year, month, day ->
+            val picked = Calendar.getInstance().apply {
+                set(year, month, day)
+            }
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            selectedQuitDate = sdf.format(picked.time)
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
     )
 
-    val milestones = remember { initial.toMutableStateList() }
+    // 🏁 MILESTONE LABELS
+    val milestoneLabels = mapOf(
+        1 to "24 Hours",
+        3 to "3 Days",
+        7 to "1 Week",
+        14 to "2 Weeks",
+        30 to "1 Month",
+        90 to "3 Months",
+        365 to "1 Year"
+    )
+
+    val milestones = remember { mutableStateListOf<Milestone>() }
+
+    // 🔄 LOAD FROM BACKEND
+    LaunchedEffect(Unit) {
+        if (userId > 0) {
+            viewModel.loadQuitPlan(userId)
+        }
+    }
+
+    // 🔄 SYNC BACKEND → UI
+    LaunchedEffect(backendMilestones) {
+        if (backendMilestones.isNotEmpty()) {
+            milestones.clear()
+            backendMilestones.forEach {
+                milestones.add(
+                    Milestone(
+                        days = it.days,
+                        label = milestoneLabels[it.days] ?: "${it.days} Days",
+                        enabled = it.enabled
+                    )
+                )
+            }
+        }
+    }
+
+    // 🔄 SYNC QUIT DATE
+    LaunchedEffect(quitDateFromBackend) {
+        if (!quitDateFromBackend.isNullOrEmpty()) {
+            selectedQuitDate = quitDateFromBackend
+        }
+    }
 
     fun toggleMilestone(index: Int) {
         val m = milestones[index]
         milestones[index] = m.copy(enabled = !m.enabled)
     }
 
-    // Quit date formatting
-    val quitDateDisplay = remember(user?.quitDate) {
-        user?.quitDate?.let { raw ->
-            val formats = listOf(
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
-                "yyyy-MM-dd",
-                "yyyy-MM-dd HH:mm:ss"
-            )
-            var parsed: Date? = null
-            for (fmt in formats) {
-                try {
-                    val sdf = SimpleDateFormat(fmt, Locale.getDefault())
-                    parsed = sdf.parse(raw)
-                    if (parsed != null) break
-                } catch (_: Exception) { }
-            }
-            parsed?.let {
-                val outFormat = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-                outFormat.format(it)
-            } ?: "Not set"
-        } ?: "Not set"
-    }
+    // 📅 FORMAT DATE FOR DISPLAY
+    val quitDateDisplay = selectedQuitDate?.let {
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val date = sdf.parse(it)
+            SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(date!!)
+        } catch (_: Exception) {
+            "Not set"
+        }
+    } ?: "Not set"
 
-    // SCROLL ENABLED HERE 👇
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -81,7 +139,7 @@ fun QuitPlanSettingsScreen(
             .verticalScroll(rememberScrollState())
     ) {
 
-        // Back Button
+        // 🔙 BACK BUTTON
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -89,36 +147,28 @@ fun QuitPlanSettingsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.DarkGray
-                )
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.DarkGray)
             }
         }
 
-        // Header
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Text("Quit Plan", style = MaterialTheme.typography.headlineMedium)
             Text("Manage your milestones", color = Color.Gray, fontSize = 14.sp)
             Spacer(Modifier.height(12.dp))
         }
 
-        // Quit Date Card
+        // 📅 QUIT DATE CARD
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .clickable { datePickerDialog.show() },
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF059669))
         ) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.CalendarToday,
-                        contentDescription = "Quit Date",
-                        tint = Color.White
-                    )
+                    Icon(Icons.Filled.CalendarToday, null, tint = Color.White)
                     Spacer(Modifier.width(8.dp))
                     Text("Quit Date", color = Color.White)
                 }
@@ -133,7 +183,7 @@ fun QuitPlanSettingsScreen(
 
         Spacer(Modifier.height(18.dp))
 
-        // Milestones Title
+        // 🏁 MILESTONES
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text("Milestone Notifications", style = MaterialTheme.typography.titleMedium)
             Text("Choose which milestones to celebrate", color = Color.Gray, fontSize = 13.sp)
@@ -141,7 +191,6 @@ fun QuitPlanSettingsScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // Milestone List
         Column(Modifier.padding(horizontal = 16.dp)) {
             milestones.forEachIndexed { index, milestone ->
                 MilestoneRow(
@@ -152,7 +201,40 @@ fun QuitPlanSettingsScreen(
             }
         }
 
+        error?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, color = Color.Red, modifier = Modifier.padding(16.dp))
+        }
+
         Spacer(Modifier.height(30.dp))
+
+        // 💾 SAVE BUTTON
+        Button(
+            onClick = {
+                viewModel.saveQuitPlan(
+                    userId = userId,
+                    quitDate = selectedQuitDate,
+                    milestones = milestones.map {
+                        QuitMilestone(it.days, it.enabled)
+                    }
+                ) {
+                    navController.popBackStack()
+                }
+            },
+            enabled = !loading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .height(55.dp),
+            shape = RoundedCornerShape(50.dp),
+            colors = ButtonDefaults.buttonColors(Color(0xFF059669))
+        ) {
+            if (loading) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            } else {
+                Text("Save Changes", color = Color.White)
+            }
+        }
     }
 }
 
@@ -162,7 +244,8 @@ private fun MilestoneRow(
     onToggle: () -> Unit
 ) {
     val circleOffset by animateDpAsState(
-        targetValue = if (milestone.enabled) 24.dp else 2.dp
+        targetValue = if (milestone.enabled) 24.dp else 2.dp,
+        label = ""
     )
 
     Card(
@@ -179,7 +262,6 @@ private fun MilestoneRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            // Left Icon
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -190,24 +272,15 @@ private fun MilestoneRow(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (milestone.enabled) {
-                    Icon(
-                        Icons.Filled.CheckCircle,
-                        contentDescription = null,
-                        tint = Color(0xFF059669)
-                    )
-                } else {
-                    Icon(
-                        Icons.Filled.Flag,
-                        contentDescription = null,
-                        tint = Color.Gray
-                    )
-                }
+                Icon(
+                    if (milestone.enabled) Icons.Filled.CheckCircle else Icons.Filled.Flag,
+                    null,
+                    tint = if (milestone.enabled) Color(0xFF059669) else Color.Gray
+                )
             }
 
             Spacer(Modifier.width(12.dp))
 
-            // Center Texts
             Column(Modifier.weight(1f)) {
                 Text(milestone.label, style = MaterialTheme.typography.bodyLarge)
                 Text(
@@ -217,7 +290,6 @@ private fun MilestoneRow(
                 )
             }
 
-            // Toggle Pill
             Box(
                 modifier = Modifier
                     .width(48.dp)

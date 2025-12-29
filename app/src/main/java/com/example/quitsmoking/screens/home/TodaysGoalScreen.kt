@@ -1,5 +1,4 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.example.quitsmoking.screens.home
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -19,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
@@ -29,7 +26,6 @@ import kotlin.math.roundToInt
 
 @Composable
 fun TodaysGoalScreen(navController: NavController) {
-
     val goalsState = remember {
         mutableStateListOf(
             Goal("1", "Morning breathing exercise", true, "8:00 AM"),
@@ -49,17 +45,15 @@ fun TodaysGoalScreen(navController: NavController) {
             if (goalsState.isNotEmpty()) completedCount.toFloat() / goalsState.size else 0f
         }
     }
-
     val animatedProgress = animateFloatAsState(progressFraction).value
     val progressPercent = (animatedProgress * 100).roundToInt()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF3F4F6))
+            .background(Color(0xFFFFF8E7)) // ☁️ Creamy background
     ) {
-
-        // TOP HEADER — same polished style as ProfileScreen
+        /* ---------- TOP HEADER ---------- */
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -71,7 +65,6 @@ fun TodaysGoalScreen(navController: NavController) {
                 .padding(horizontal = 16.dp, vertical = 20.dp)
         ) {
             Column {
-
                 IconButton(onClick = { navController.navigateUp() }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
@@ -79,15 +72,12 @@ fun TodaysGoalScreen(navController: NavController) {
                         tint = Color.White
                     )
                 }
-
                 Spacer(modifier = Modifier.height(6.dp))
-
                 Text(
                     "Today's Goals",
                     color = Color.White,
                     style = MaterialTheme.typography.headlineSmall
                 )
-
                 Text(
                     "$completedCount of ${goalsState.size} completed",
                     color = Color.White.copy(alpha = 0.9f),
@@ -96,19 +86,19 @@ fun TodaysGoalScreen(navController: NavController) {
             }
         }
 
-        // MAIN CONTENT
+        /* ---------- MAIN CONTENT ---------- */
         Column(modifier = Modifier.padding(16.dp)) {
 
-            // ---- Progress Card ----
+            /* ---- Progress Card ---- */
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset(y = (-20).dp),
                 shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(6.dp)
+                elevation = CardDefaults.cardElevation(8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -116,29 +106,26 @@ fun TodaysGoalScreen(navController: NavController) {
                         Text("Daily Progress", color = Color.Gray)
                         Text("$progressPercent%", color = Color(0xFF059669))
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     LinearProgressIndicator(
                         progress = { animatedProgress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp),
-                        color = Color(0xFF059669)
+                        color = Color(0xFF059669),
+                        trackColor = Color(0xFFE5E7EB)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ---- GOALS LIST ----
+            /* ---- GOALS LIST ---- */
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-
                 items(items = goalsState, key = { it.id }) { goal ->
-
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -149,15 +136,14 @@ fun TodaysGoalScreen(navController: NavController) {
                                         goalsState[index].copy(completed = !goal.completed)
                                 }
                             },
-                        elevation = CardDefaults.cardElevation(4.dp),
-                        shape = RoundedCornerShape(14.dp)
+                        elevation = CardDefaults.cardElevation(6.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White) // 🕊️ White card
                     ) {
-
                         Row(
                             modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-
                             if (goal.completed) {
                                 Icon(
                                     Icons.Filled.CheckCircle,
@@ -177,7 +163,6 @@ fun TodaysGoalScreen(navController: NavController) {
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-
                                 Text(
                                     goal.text,
                                     style = MaterialTheme.typography.bodyLarge,
@@ -188,7 +173,6 @@ fun TodaysGoalScreen(navController: NavController) {
                                         TextDecoration.LineThrough
                                     else TextDecoration.None
                                 )
-
                                 goal.time?.let {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(it, color = Color.Gray)
@@ -208,7 +192,7 @@ fun TodaysGoalScreen(navController: NavController) {
     }
 }
 
-// MODEL
+/* ---------- MODEL ---------- */
 data class Goal(
     val id: String,
     val text: String,

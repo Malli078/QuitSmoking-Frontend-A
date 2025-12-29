@@ -1,247 +1,201 @@
 package com.example.quitsmoking.screens.profile
 
+import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.SmokingRooms
-import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.quitsmoking.viewmodel.HabitViewModel
 
 @Composable
-fun HabitSettingsScreen(navController: NavController) {
+fun HabitSettingsScreen(
+    navController: NavController,
+    viewModel: HabitViewModel = viewModel()
+) {
+    val context = LocalContext.current
 
-    // ------------------ USER STATE ------------------
+    // 🔐 USER ID
+    val userPrefs =
+        context.getSharedPreferences("user_profile", Context.MODE_PRIVATE)
+    val userId = userPrefs.getInt("user_id", 0)
+
+    // 💾 LOCAL PREFS (USED BY PROFILE SCREEN)
+    val prefs =
+        context.getSharedPreferences("user_habits", Context.MODE_PRIVATE)
+
+    // UI STATE
     var cigarettesPerDay by remember { mutableStateOf(10) }
     var costPerPack by remember { mutableStateOf(10) }
-    var cigarettesPerPack by remember { mutableStateOf(20) }
 
-    // ------------------ SCREEN UI ------------------
+    // 🚨 NOT BACKEND — LOCAL ONLY
+    var cigarettesPerPack by remember {
+        mutableStateOf(prefs.getInt("cigarettes_per_pack", 20))
+    }
+
+    // BACKEND STATE
+    val habits by viewModel.habits.collectAsState()
+    val loading by viewModel.loading.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    // LOAD FROM BACKEND
+    LaunchedEffect(Unit) {
+        if (userId > 0) {
+            viewModel.loadHabits(userId)
+        }
+    }
+
+    // BACKEND → UI
+    LaunchedEffect(habits) {
+        habits?.let {
+            cigarettesPerDay = it.cigarettes_per_day
+            costPerPack = it.cost_per_pack.toInt()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF3F4F6))
     ) {
 
-        // ---------- TOP BAR ----------
+        // 🔙 TOP BAR
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 40.dp, start = 16.dp, end = 16.dp, bottom = 12.dp),
+                .padding(top = 40.dp, start = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.Black
-                )
+                Icon(Icons.Default.ArrowBack, null)
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Text("Habit Settings", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(6.dp))
             Text("Adjust your smoking habits", color = Color.Gray)
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
         }
 
-        // ------------------ CONTENT ------------------
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp)
         ) {
 
-            // ------------------ Cigarettes Per Day ------------------
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
+            // 🚬 CIGARETTES PER DAY
+            Card(shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(20.dp)) {
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFFE5E5)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SmokingRooms,
-                                contentDescription = null,
-                                tint = Color(0xFFCC0000)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text("Cigarettes Per Day", color = Color.Black)
-                            Text("Before you quit", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
+                    Text("Cigarettes Per Day")
+                    Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
 
-                        // minus button
                         IconButton(
-                            onClick = { cigarettesPerDay = maxOf(1, cigarettesPerDay - 1) },
+                            onClick = {
+                                cigarettesPerDay = maxOf(1, cigarettesPerDay - 1)
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF0F0F0))
+                                .background(Color.LightGray)
                         ) {
-                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.Gray)
+                            Icon(Icons.Default.Remove, null)
                         }
 
-                        Spacer(modifier = Modifier.width(20.dp))
+                        Spacer(Modifier.width(20.dp))
 
                         Text(
-                            text = cigarettesPerDay.toString(),
+                            cigarettesPerDay.toString(),
                             style = MaterialTheme.typography.headlineMedium
                         )
 
-                        Spacer(modifier = Modifier.width(20.dp))
+                        Spacer(Modifier.width(20.dp))
 
-                        // plus button
                         IconButton(
                             onClick = { cigarettesPerDay++ },
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF0F0F0))
+                                .background(Color.LightGray)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.Gray)
+                            Icon(Icons.Default.Add, null)
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
-            // ------------------ Cost Per Pack ------------------
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-
+            // 💰 COST PER PACK
+            Card(shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(20.dp)) {
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE5F9F0)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.AttachMoney,
-                                contentDescription = "",
-                                tint = Color(0xFF009966)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text("Cost Per Pack", color = Color.Black)
-                            Text("Average price", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
+                    Text("Cost Per Pack")
+                    Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = costPerPack.toString(),
                         onValueChange = {
-                            costPerPack = it.toIntOrNull() ?: 0
+                            costPerPack = it.toIntOrNull() ?: costPerPack
                         },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
-            // ------------------ Cigarettes Per Pack ------------------
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-
+            // 📦 CIGARETTES PER PACK (LOCAL ONLY)
+            Card(shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(20.dp)) {
-
-                    Text("Cigarettes Per Pack", color = Color.Black)
-                    Text("Usually 20 or 25", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-
-                        Button(
-                            onClick = { cigarettesPerPack = 20 },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (cigarettesPerPack == 20) Color(0xFF009966)
-                                else Color(0xFFF0F0F0)
-                            )
-                        ) {
-                            Text(
-                                "20",
-                                color = if (cigarettesPerPack == 20) Color.White else Color.Gray
-                            )
-                        }
-
-                        Button(
-                            onClick = { cigarettesPerPack = 25 },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (cigarettesPerPack == 25) Color(0xFF009966)
-                                else Color(0xFFF0F0F0)
-                            )
-                        ) {
-                            Text(
-                                "25",
-                                color = if (cigarettesPerPack == 25) Color.White else Color.Gray
-                            )
+                    Text("Cigarettes Per Pack")
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf(20, 25).forEach { value ->
+                            Button(
+                                onClick = { cigarettesPerPack = value },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor =
+                                        if (cigarettesPerPack == value)
+                                            Color(0xFF009966)
+                                        else Color.LightGray
+                                )
+                            ) {
+                                Text(
+                                    value.toString(),
+                                    color =
+                                        if (cigarettesPerPack == value)
+                                            Color.White
+                                        else Color.Black
+                                )
+                            }
                         }
                     }
                 }
             }
+
+            error?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(it, color = Color.Red)
+            }
         }
 
-        // ------------------ SAVE BUTTON ------------------
+        // 💾 SAVE BUTTON
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -249,18 +203,41 @@ fun HabitSettingsScreen(navController: NavController) {
             contentAlignment = Alignment.Center
         ) {
             Button(
+                onClick = {
+                    // BACKEND SAVE (ONLY WHAT BACKEND SUPPORTS)
+                    viewModel.saveHabits(
+                        userId = userId,
+                        cigarettesPerDay = cigarettesPerDay,
+                        costPerPack = costPerPack.toDouble(),
+                        quitDate = null
+                    ) {
+                        // LOCAL SAVE (PROFILE SCREEN USES THIS)
+                        prefs.edit()
+                            .putInt("cigarettes_per_day", cigarettesPerDay)
+                            .putInt("cost_per_pack", costPerPack)
+                            .putInt("cigarettes_per_pack", cigarettesPerPack)
+                            .apply()
+
+                        navController.navigate("profile") {
+                            popUpTo("habit_settings") { inclusive = true }
+                        }
+                    }
+                },
+                enabled = !loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(55.dp),
                 shape = RoundedCornerShape(50.dp),
-                onClick = {
-                    navController.navigate("profile") {
-                        popUpTo("habit_settings") { inclusive = true }
-                    }
-                },
                 colors = ButtonDefaults.buttonColors(Color(0xFF009966))
             ) {
-                Text("Save Changes", color = Color.White)
+                if (loading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    Text("Save Changes", color = Color.White)
+                }
             }
         }
     }

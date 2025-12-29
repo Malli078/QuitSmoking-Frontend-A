@@ -7,24 +7,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.quitsmoking.viewmodel.ForgotPasswordViewModel
+import com.example.quitsmoking.viewmodel.ResetPasswordViewModel
 
 @Composable
-fun ForgotPasswordScreen(navController: NavController) {
+fun ResetPasswordScreen(
+    navController: NavController,
+    email: String
+) {
+    val vm: ResetPasswordViewModel = viewModel()
+    var otp by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
 
-    val vm: ForgotPasswordViewModel = viewModel()
-    var email by remember { mutableStateOf("") }
-    var navigated by remember { mutableStateOf(false) }
-
-    // 🔐 Navigate ONLY ONCE after OTP success
+    // ✅ After password reset → Login
     LaunchedEffect(vm.success.value) {
-        if (vm.success.value && !navigated) {
-            navigated = true
-            navController.navigate("reset_password/$email")
-            vm.success.value = false
+        if (vm.success.value) {
+            navController.navigate("login") {
+                popUpTo("login") { inclusive = true }
+            }
         }
     }
 
@@ -38,16 +41,26 @@ fun ForgotPasswordScreen(navController: NavController) {
         Spacer(Modifier.height(60.dp))
 
         Text(
-            text = "Forgot Password",
+            text = "Reset Password",
             style = MaterialTheme.typography.headlineMedium
         )
 
         Spacer(Modifier.height(20.dp))
 
         OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
+            value = otp,
+            onValueChange = { otp = it },
+            label = { Text("OTP") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("New Password") },
+            visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -60,9 +73,7 @@ fun ForgotPasswordScreen(navController: NavController) {
 
         Button(
             onClick = {
-                if (email.isNotBlank()) {
-                    vm.sendOtp(email)
-                }
+                vm.reset(email, otp, password)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -77,7 +88,7 @@ fun ForgotPasswordScreen(navController: NavController) {
                     color = Color.White
                 )
             } else {
-                Text("Send OTP")
+                Text("Reset Password")
             }
         }
     }

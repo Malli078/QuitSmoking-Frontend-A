@@ -1,189 +1,229 @@
 package com.example.quitsmoking.screens
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.quitsmoking.viewmodel.LoginViewModel
 
 @Composable
 fun LoginScreen(navController: NavController) {
+    val context = LocalContext.current
+    val viewModel: LoginViewModel = viewModel()
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var localError by remember { mutableStateOf("") }
 
-    var passwordVisible by remember { mutableStateOf(false) }
-
-    // NEW: error message state
-    var errorMessage by remember { mutableStateOf("") }
-    var triedLogin by remember { mutableStateOf(false) }
-
-    // Validation logic
-    fun validate(): Boolean {
-        if (email.isBlank() || password.isBlank()) {
-            errorMessage = "Please fill all fields"
-            return false
+    // ✅ Navigate when success
+    LaunchedEffect(viewModel.success.value) {
+        if (viewModel.success.value) {
+            navController.navigate("home") {
+                popUpTo("login") { inclusive = true }
+            }
+            viewModel.success.value = false
         }
-        if (!email.contains("@") || !email.contains(".")) {
-            errorMessage = "Invalid email format"
-            return false
-        }
-        if (password.length < 6) {
-            errorMessage = "Password must be at least 6 characters"
-            return false
-        }
-        return true
     }
 
-    Surface(
+    // 🌫️ Gentle smoke float animation
+    val infiniteTransition = rememberInfiniteTransition(label = "bg_anim")
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = -10f,
+        targetValue = 10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "offsetY"
+    )
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF3FEFE))
-            .padding(24.dp)
+            .background(Color.White),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(60.dp))
+        // 🖼️ Background smoke image
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data("https://as2.ftcdn.net/v2/jpg/10/51/32/77/1000_F_1051327760_G7G4vuZxAwYcBDEcbHL5PGy9nRDaH8Pw.jpg")
+                .crossfade(true)
+                .build(),
+            contentDescription = "Stop Smoking Background",
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(20.dp)
+                .alpha(0.6f)
+                .offset(y = offsetY.dp),
+            contentScale = ContentScale.Crop
+        )
 
-            Text(
-                text = "QuitSmoking",
-                style = MaterialTheme.typography.headlineLarge,
-                color = Color(0xFF00695C)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                "Welcome Back 👋",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color(0xFF00695C)
-            )
-            Text(
-                "Login to continue your quit journey",
-                fontSize = 15.sp,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = {
-                            email = it
-                            if (triedLogin) errorMessage = ""
-                        },
-                        label = { Text("Email") },
-                        singleLine = true,
-                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = {
-                            password = it
-                            if (triedLogin) errorMessage = ""
-                        },
-                        label = { Text("Password") },
-                        singleLine = true,
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible)
-                                        Icons.Default.Visibility
-                                    else
-                                        Icons.Default.VisibilityOff,
-                                    contentDescription = null
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (passwordVisible)
-                            VisualTransformation.None else PasswordVisualTransformation()
-                    )
-
-                    // 🔴 ERROR MESSAGE (only shows when wrong input)
-                    if (errorMessage.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = errorMessage,
-                            color = Color.Red,
-                            fontSize = 14.sp
+        // 💨 Frosted Glass Box for Login Form
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.LightGray.copy(alpha = 0.25f)
                         )
-                    }
+                    )
+                )
+                .blur(0.dp) // smoke effect
+                .padding(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 🚭 Circular Logo
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.5f))
+                        .blur(0.dp)
+                        .padding(6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("https://as2.ftcdn.net/v2/jpg/15/22/23/95/1000_F_1522239509_1J9sPLsIINyK7sU8VfEAD1hH5vZVgAVZ.jpg")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "No Smoking Icon",
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        TextButton(
-                            onClick = { navController.navigate("forgot_password") },
-                            modifier = Modifier.align(Alignment.CenterEnd)
-                        ) {
-                            Text("Forgot Password?", color = Color(0xFF00897B))
+                // 🧾 Title
+                Text(
+                    text = "QuitSmoking",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // ✉️ Email
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email", color = Color.Black) },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color.Black) },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = LocalTextStyle.current.copy(color = Color.Black)
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // 🔒 Password
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password", color = Color.Black) },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Black) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = LocalTextStyle.current.copy(color = Color.Black)
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = "Forgot Password?",
+                        color = Color(0xFF00695C),
+                        modifier = Modifier.clickable {
+                            navController.navigate("forgot_password")
                         }
+                    )
+                }
+
+                val errorText = if (localError.isNotEmpty()) localError else viewModel.error.value
+                if (errorText.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(errorText, color = Color.Red)
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // 🔘 Login Button
+                Button(
+                    onClick = {
+                        if (email.isBlank() || password.isBlank()) {
+                            localError = "All fields are required"
+                        } else {
+                            localError = ""
+                            viewModel.login(email, password, context)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !viewModel.loading.value
+                ) {
+                    if (viewModel.loading.value) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Login", color = Color.White)
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(22.dp))
+                Spacer(Modifier.height(20.dp))
 
-            // LOGIN BUTTON
-            Button(
-                onClick = {
-                    triedLogin = true
-                    if (validate()) {
-                        // If valid → go to home
-                        navController.navigate("home") {
-                            popUpTo("login") { inclusive = true }
+                // 👤 Signup
+                Row {
+                    Text("Don’t have an account? ", color = Color.Black)
+                    Text(
+                        text = "Sign up",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00695C),
+                        modifier = Modifier.clickable {
+                            navController.navigate("create_account")
                         }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(55.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00897B)
-                )
-            ) {
-                Text("Log In", color = Color.White, fontSize = 17.sp)
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Don't have an account?", color = Color.Gray)
-
-                TextButton(onClick = {
-                    navController.navigate("create_account")
-                }) {
-                    Text("Sign Up", color = Color(0xFF00897B))
+                    )
                 }
             }
         }

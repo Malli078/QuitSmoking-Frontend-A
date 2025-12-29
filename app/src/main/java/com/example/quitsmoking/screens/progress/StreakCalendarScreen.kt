@@ -1,466 +1,392 @@
 package com.example.quitsmoking.screens.progress
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.temporal.ChronoUnit
-import kotlin.math.max
+import com.example.quitsmoking.viewmodel.StreakViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun StreakCalendarScreen(
-    navController: NavController,
-    userQuitDateMillis: Long? = null
+    navController: NavController
 ) {
-    val quitDate = remember(userQuitDateMillis) {
-        if (userQuitDateMillis != null) {
-            LocalDate.ofEpochDay((userQuitDateMillis / 86_400_000L).coerceAtLeast(0L))
-        } else {
-            LocalDate.now()
-        }
-    }
+    val scrollState = rememberScrollState()
+    val todayCal = Calendar.getInstance()
 
-    val today = remember { LocalDate.now() }
-    var currentYear by remember { mutableStateOf(today.year) }
-    var currentMonthIndex by remember { mutableStateOf(today.monthValue - 1) } // 0-based
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-
-    val daysSinceQuit = remember(quitDate) {
-        max(0, ChronoUnit.DAYS.between(quitDate, today).toInt())
-    }
+    var year by remember { mutableStateOf(todayCal.get(Calendar.YEAR)) }
+    var month by remember { mutableStateOf(todayCal.get(Calendar.MONTH)) }
+    var selectedDay by remember { mutableStateOf<Int?>(null) }
 
     val daysOfWeek = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-    val monthNames = listOf(
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
+
+    val monthLabel = SimpleDateFormat(
+        "MMMM yyyy",
+        Locale.getDefault()
+    ).format(
+        Calendar.getInstance().apply {
+            set(Calendar.YEAR, year)
+            set(Calendar.MONTH, month)
+        }.time
     )
 
-    val yearMonth = remember(currentYear, currentMonthIndex) {
-        YearMonth.of(currentYear, currentMonthIndex + 1)
-    }
-    val firstDay = yearMonth.atDay(1)
-    val daysInMonth = yearMonth.lengthOfMonth()
-    val jsStarting = firstDay.dayOfWeek.value % 7 // map SUN->0, MON->1, ...
+    // 🔗 ViewModel
+    val viewModel: StreakViewModel = viewModel()
+    val calendarData by viewModel.calendar.collectAsState()
+    val stats by viewModel.stats.collectAsState()
 
-    val calendarDays = remember(currentYear, currentMonthIndex) {
-        val list = mutableStateListOf<Int?>()
-        repeat(jsStarting) { list.add(null) } // leading blanks
-        for (d in 1..daysInMonth) list.add(d)
-        list
-    }
+    val userId = 1 // TODO: replace with logged-in user id
 
-    fun isDaySmokeFree(day: Int): Boolean {
-        val check = LocalDate.of(currentYear, currentMonthIndex + 1, day)
-        return !check.isBefore(quitDate) && !check.isAfter(today)
+    // 🔥 Load backend data
+    LaunchedEffect(year, month) {
+        viewModel.loadMonth(
+            userId = userId,
+            year = year,
+            month = month + 1
+        )
+        viewModel.loadStats(userId)
     }
-
-    fun isTodayDate(day: Int): Boolean {
-        return day == today.dayOfMonth && currentMonthIndex == (today.monthValue - 1) && currentYear == today.year
-    }
-
-    fun isSelectedDate(day: Int): Boolean {
-        val sel = selectedDate ?: return false
-        return sel.dayOfMonth == day && sel.monthValue == currentMonthIndex + 1 && sel.year == currentYear
-    }
-
-    fun handleDateClick(day: Int) {
-        selectedDate = LocalDate.of(currentYear, currentMonthIndex + 1, day)
-    }
-
-    fun getDaysSinceQuitForDate(date: LocalDate): Int {
-        return max(0, ChronoUnit.DAYS.between(quitDate, date).toInt())
-    }
-
-    fun goToPreviousMonth() {
-        if (currentMonthIndex == 0) {
-            currentMonthIndex = 11
-            currentYear -= 1
-        } else {
-            currentMonthIndex -= 1
-        }
-        selectedDate = null
-    }
-
-    fun goToNextMonth() {
-        if (currentYear == today.year && currentMonthIndex == (today.monthValue - 1)) return
-        if (currentMonthIndex == 11) {
-            currentMonthIndex = 0
-            currentYear += 1
-        } else {
-            currentMonthIndex += 1
-        }
-        selectedDate = null
-    }
-
-    val canGoNext = !(currentYear == today.year && currentMonthIndex == (today.monthValue - 1))
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
+            .background(Color(0xFFF8FAFC))
     ) {
-        // Header
+
+        /* ---------- HEADER ---------- */
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    Brush.linearGradient(listOf(Color(0xFFF97316), Color(0xFFEF4444)))
+                    Brush.verticalGradient(
+                        listOf(Color(0xFFFF7A18), Color(0xFFFF3D3D))
+                    )
                 )
-                .padding(horizontal = 16.dp, vertical = 20.dp)
+                .padding(20.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable { navController.navigate("home") }
+                )
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "←",
+                    text = "Streak Calendar",
                     color = Color.White,
                     fontSize = 22.sp,
-                    modifier = Modifier
-                        .clickable { navController.navigate("home") }
-                        .padding(8.dp)
+                    fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(text = "Streak Calendar", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text(text = "Your smoke-free journey", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
+                Text(
+                    text = "Your smoke-free journey",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 14.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        /* ---------- CURRENT STREAK ---------- */
+
+        Card(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Current Streak", color = Color.Gray, fontSize = 12.sp)
+                    Text(
+                        "${stats?.currentStreak ?: 0} days",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color(0xFFFF7A18), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.LocalFireDepartment,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
                 }
             }
         }
 
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            // Current Streak card
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                tonalElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(text = "Current Streak", color = Color.Gray, fontSize = 12.sp)
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(text = "$daysSinceQuit", fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "days", color = Color.Gray)
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(Color(0xFFF97316), Color(0xFFEF4444)))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("🔥", fontSize = 20.sp)
-                    }
+        Spacer(Modifier.height(16.dp))
+
+        /* ---------- QUICK ACTIONS ---------- */
+
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            QuickActionCard(
+                icon = Icons.Default.MilitaryTech,
+                label = "Achievements",
+                modifier = Modifier.weight(1f)
+            ) { navController.navigate("achievements") }
+
+            QuickActionCard(
+                icon = Icons.Default.AttachMoney,
+                label = "Money Saved",
+                modifier = Modifier.weight(1f)
+            ) { navController.navigate("money_saved") }
+
+            QuickActionCard(
+                icon = Icons.Default.EmojiEvents,
+                label = "Milestones",
+                modifier = Modifier.weight(1f)
+            ) { navController.navigate("milestone") }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        /* ---------- MONTH NAV ---------- */
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "‹",
+                fontSize = 22.sp,
+                modifier = Modifier.clickable {
+                    if (month == 0) {
+                        month = 11
+                        year--
+                    } else month--
+                    selectedDay = null
                 }
+            )
+            Text(monthLabel, fontWeight = FontWeight.Bold)
+            Text(
+                "›",
+                fontSize = 22.sp,
+                modifier = Modifier.clickable {
+                    if (month == 11) {
+                        month = 0
+                        year++
+                    } else month++
+                    selectedDay = null
+                }
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        /* ---------- DAYS HEADER ---------- */
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            daysOfWeek.forEach {
+                Text(
+                    it,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
             }
+        }
 
-            Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
-            // Quick access buttons (3 columns)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                @Composable
-                fun QuickBtn(label: String, emoji: String, onClick: () -> Unit) {
-                    // Put clickable on the top-level Surface to ensure the whole tile is tappable
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onClick() },
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.White,
-                        tonalElevation = 1.dp
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFFF7ED)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(emoji, fontSize = 18.sp)
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(label, fontSize = 12.sp, color = Color(0xFF111827), textAlign = TextAlign.Center)
-                        }
-                    }
-                }
+        /* ---------- CALENDAR GRID ---------- */
 
-                // Achievements button now navigates to the achievements route
-                QuickBtn("Achievements", "🏆") { navController.navigate("achievements") }
+        val tempCal = Calendar.getInstance().apply {
+            set(Calendar.YEAR, year)
+            set(Calendar.MONTH, month)
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
 
-                // Other example buttons
-                QuickBtn("Money Saved", "💵") { navController.navigate("money-saved") }
-                QuickBtn("Milestones", "🎖️") { navController.navigate("milestone-celebration") }
-            }
+        val daysInMonth = tempCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val firstDayOffset = tempCal.get(Calendar.DAY_OF_WEEK) - 1
 
-            Spacer(modifier = Modifier.height(16.dp))
+        val cells = mutableListOf<Int?>()
+        repeat(firstDayOffset) { cells.add(null) }
+        for (d in 1..daysInMonth) cells.add(d)
 
-            // Calendar card
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        IconButton(onClick = { goToPreviousMonth() }) {
-                            Text("◀", fontSize = 16.sp, color = Color(0xFF374151))
-                        }
-                        Text(text = "${monthNames[currentMonthIndex]} $currentYear", fontSize = 16.sp, color = Color(0xFF111827), fontWeight = FontWeight.SemiBold)
-                        IconButton(onClick = { goToNextMonth() }, enabled = canGoNext) {
-                            Text("▶", fontSize = 16.sp, color = if (canGoNext) Color(0xFF374151) else Color.Gray)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Days of week header
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        daysOfWeek.forEach { d ->
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Text(text = d, fontSize = 12.sp, color = Color.Gray)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Calendar grid (rows of 7)
-                    val rows = calendarDays.chunked(7)
-                    rows.forEach { week ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            week.forEach { day ->
-                                Box(modifier = Modifier.weight(1f).aspectRatio(1f)) {
-                                    if (day == null) {
-                                        Spacer(modifier = Modifier.fillMaxSize())
-                                    } else {
-                                        val smokeFree = isDaySmokeFree(day)
-                                        val todayCell = isTodayDate(day)
-                                        val selected = isSelectedDate(day)
-                                        val bgModifier = if (todayCell) {
-                                            Modifier
-                                                .fillMaxSize()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(Brush.linearGradient(listOf(Color(0xFFF97316), Color(0xFFEF4444))))
-                                        } else {
-                                            Modifier
-                                                .fillMaxSize()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(if (selected) Color(0xFFEFF6FF) else if (smokeFree) Color(0xFFECFDF5) else Color(0xFFF3F4F6))
-                                        }
-
-                                        Box(modifier = bgModifier.clickable { handleDateClick(day) }, contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = day.toString(),
-                                                color = when {
-                                                    todayCell -> Color.White
-                                                    smokeFree -> Color(0xFF065F46)
-                                                    else -> Color(0xFF9CA3AF)
-                                                },
-                                                fontSize = 14.sp
-                                            )
-                                            if (smokeFree && !todayCell) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .align(Alignment.TopEnd)
-                                                        .padding(4.dp)
-                                                        .size(12.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color(0xFF10B981)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text("✓", color = Color.White, fontSize = 10.sp)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Legend
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFECFDF5)))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Smoke-free", fontSize = 12.sp, color = Color.Gray)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFF3F4F6)))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Before quit", fontSize = 12.sp, color = Color.Gray)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(
-                                Brush.linearGradient(listOf(Color(0xFFF97316), Color(0xFFEF4444))).let { Color.Unspecified }
-                            ))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Today", fontSize = 12.sp, color = Color.Gray)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Selected date details
-            selectedDate?.let { sel ->
-                val selDaysSince = getDaysSinceQuitForDate(sel)
-                Surface(
-                    color = Color.Unspecified,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6))))
-                            .padding(12.dp)
-                    ) {
-                        Column {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Selected Date", color = Color.White, fontSize = 16.sp)
-                                Text("✕", color = Color.White.copy(alpha = 0.85f), modifier = Modifier.clickable { selectedDate = null })
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = sel.toString(), color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            when {
-                                !sel.isBefore(quitDate) && !sel.isAfter(today) -> {
-                                    Surface(shape = RoundedCornerShape(12.dp), color = Color.White.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
-                                            Text("Days smoke-free on this date", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text("$selDaysSince ${if (selDaysSince == 1) "day" else "days"}", color = Color.White, fontSize = 20.sp)
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("✓", color = Color(0xFF10B981))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Smoke-free day! 🎉", color = Color.White)
-                                    }
-                                    if (sel.isEqual(quitDate)) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Surface(shape = RoundedCornerShape(12.dp), color = Color.White.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                Text("🎊 This is your quit date! The beginning of your amazing journey!", color = Color.White, fontSize = 13.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                                sel.isBefore(quitDate) -> {
-                                    Surface(shape = RoundedCornerShape(12.dp), color = Color.White.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
-                                            Text("This date was before you quit smoking.", color = Color.White, fontSize = 13.sp)
-                                        }
-                                    }
-                                }
-                                else -> {
-                                    Surface(shape = RoundedCornerShape(12.dp), color = Color.White.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
-                                            Text("This date is in the future. Keep up the great work!", color = Color.White, fontSize = 13.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // Stats grid
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(modifier = Modifier.weight(1f), color = Color.White, shape = RoundedCornerShape(12.dp)) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Longest Streak", color = Color.Gray, fontSize = 12.sp)
-                        Text("$daysSinceQuit days", color = Color(0xFF111827), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Surface(modifier = Modifier.weight(1f), color = Color.White, shape = RoundedCornerShape(12.dp)) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Total Days", color = Color.Gray, fontSize = 12.sp)
-                        Text("$daysSinceQuit", color = Color(0xFF111827), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Motivation card
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Unspecified
-            ) {
-                Box(modifier = Modifier.background(Brush.linearGradient(listOf(Color(0xFF7C3AED), Color(0xFFEC4899)))).padding(12.dp)) {
-                    Column {
-                        Text("Keep it up!", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        val message = when {
-                            daysSinceQuit == 0 -> "Today is day one. You've got this!"
-                            daysSinceQuit < 7 -> "Just ${7 - daysSinceQuit} more days to one week!"
-                            daysSinceQuit < 30 -> "${30 - daysSinceQuit} days until one month milestone!"
-                            daysSinceQuit < 90 -> "${90 - daysSinceQuit} days until 3 months smoke-free!"
-                            else -> "You're doing amazing! Keep going! 🎉"
-                        }
-                        Text(message, color = Color.White, fontSize = 16.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Next achievement card (clickable -> achievements)
-            Spacer(modifier = Modifier.height(8.dp))
-            // Make sure clickable is applied to the full-width surface (or top Box) so the tap registers
-            Surface(
+        cells.chunked(7).forEach { week ->
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { navController.navigate("achievements") },
-                shape = RoundedCornerShape(16.dp),
-                color = Brush.linearGradient(listOf(Color(0xFF7C3AED), Color(0xFFEC4899))).let { Color.Unspecified }
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Achievements", color = Color.White.copy(alpha = 0.95f), fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Tap to view all badges", color = Color.White, fontSize = 16.sp)
+                week.forEach { day ->
+                    val isSelected = day == selectedDay
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .background(
+                                if (isSelected) Color(0xFFFF7A18) else Color.White,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .border(
+                                width = if (day == todayCal.get(Calendar.DAY_OF_MONTH)
+                                    && month == todayCal.get(Calendar.MONTH)
+                                    && year == todayCal.get(Calendar.YEAR)
+                                ) 2.dp else 0.dp,
+                                color = Color(0xFFFF7A18),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clickable(enabled = day != null) {
+                                selectedDay = day
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (day != null) {
+                            Text(
+                                text = day.toString(),
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) Color.White else Color(0xFF111827)
+                            )
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(6.dp))
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(80.dp))
+    }
+}
+
+/* ===================================================== */
+/* ================= QUICK ACTION CARD ================= */
+/* ===================================================== */
+
+@Composable
+fun QuickActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    var pressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "scale"
+    )
+
+    val elevation by animateDpAsState(
+        targetValue = if (pressed) 2.dp else 8.dp,
+        animationSpec = tween(150),
+        label = "elevation"
+    )
+
+    Card(
+        modifier = modifier
+            .height(96.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        tryAwaitRelease()
+                        pressed = false
+                    }
+                )
+            }
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(elevation)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        Color(0xFFFF7A18).copy(alpha = 0.12f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Color(0xFFFF7A18),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF111827)
+            )
         }
     }
 }

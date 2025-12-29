@@ -2,6 +2,7 @@
 
 package com.example.quitsmoking.screens.profile
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,100 +12,74 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Policy
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.quitsmoking.viewmodel.PrivacySecurityViewModel
 
 @Composable
-fun PrivacySecurityScreen(navController: NavController) {
+fun PrivacySecurityScreen(
+    navController: NavController,
+    viewModel: PrivacySecurityViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("user_profile", Context.MODE_PRIVATE)
+    val userId = prefs.getInt("user_id", 0)
+
+    val loading by viewModel.loading.collectAsState()
+    val message by viewModel.message.collectAsState()
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // MESSAGE TOAST
+    LaunchedEffect(message) {
+        message?.let {
+            android.widget.Toast
+                .makeText(context, it, android.widget.Toast.LENGTH_SHORT)
+                .show()
+            viewModel.clearMessage()
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Privacy & Security") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
         }
     ) { padding ->
+
         Column(
             modifier = Modifier
-                .padding(padding) // scaffold insets first
+                .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()) // <--- make it scrollable
+                .verticalScroll(rememberScrollState())
                 .background(Color(0xFFF9FAFB))
                 .padding(16.dp)
         ) {
+
             Text("Your data is protected", color = Color.Gray, fontSize = 14.sp)
             Spacer(Modifier.height(16.dp))
 
-            // GREEN INFO CARD
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE6F8EE)),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF34D399).copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = Color(0xFF059669)
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("Your Privacy Matters", fontSize = 16.sp, color = Color.Black)
-                        Text(
-                            "All your data is encrypted and stored securely. We never share your personal information.",
-                            fontSize = 13.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
+            // INFO CARD
+            InfoCard()
 
             Spacer(Modifier.height(20.dp))
 
-            // MENU BUTTONS
             MenuButton(
                 title = "Privacy Policy",
                 subtitle = "How we protect your data",
@@ -113,6 +88,7 @@ fun PrivacySecurityScreen(navController: NavController) {
                 icon = Icons.Default.Policy,
                 onClick = {}
             )
+
             MenuButton(
                 title = "Data Encryption",
                 subtitle = "End-to-end security",
@@ -123,47 +99,94 @@ fun PrivacySecurityScreen(navController: NavController) {
                 trailingColor = Color(0xFF059669),
                 onClick = {}
             )
+
             MenuButton(
                 title = "Export My Data",
                 subtitle = "Download all your information",
                 bg = Color(0xFFD1FAE5),
                 iconColor = Color(0xFF059669),
                 icon = Icons.Default.Download,
-                onClick = {}
+                onClick = { viewModel.exportData(userId) }
             )
+
             MenuButton(
                 title = "Delete Account",
                 subtitle = "Permanently remove your data",
                 bg = Color(0xFFFEE2E2),
                 iconColor = Color(0xFFDC2626),
                 icon = Icons.Default.Delete,
-                onClick = {}
+                onClick = { showDeleteDialog = true }
             )
+        }
+    }
 
-            Spacer(Modifier.height(20.dp))
-
-            // LIST OF DATA WE COLLECT
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Data We Collect", fontSize = 16.sp, color = Color.Black)
-                    Spacer(Modifier.height(8.dp))
-                    Text("• Smoking habits and quit date", color = Color.Gray, fontSize = 13.sp)
-                    Text("• Craving logs and patterns", color = Color.Gray, fontSize = 13.sp)
-                    Text("• Health metrics (optional)", color = Color.Gray, fontSize = 13.sp)
-                    Text("• Usage analytics (anonymized)", color = Color.Gray, fontSize = 13.sp)
+    // DELETE CONFIRMATION
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Account") },
+            text = { Text("This action is permanent. Are you sure?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteAccount(userId) {
+                        prefs.edit().clear().apply()
+                        navController.navigate("login") {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                        }
+                    }
+                }) {
+                    Text("Delete", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
                 }
             }
+        )
+    }
 
-            Spacer(Modifier.height(32.dp)) // extra bottom spacing so last card isn't flush to screen
+    if (loading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
         }
     }
 }
 
-// Reusable Menu Button Composable (like your React buttons)
+/* ---------- SMALL UI HELPERS ---------- */
+
+@Composable
+private fun InfoCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE6F8EE)),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF34D399).copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Security, null, tint = Color(0xFF059669))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Your Privacy Matters", fontSize = 16.sp)
+                Text(
+                    "All your data is encrypted and stored securely.",
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun MenuButton(
     title: String,
@@ -176,17 +199,13 @@ private fun MenuButton(
     onClick: () -> Unit
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 12.dp)
             .clickable { onClick() }
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -194,15 +213,15 @@ private fun MenuButton(
                     .background(bg),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = iconColor)
+                Icon(icon, null, tint = iconColor)
             }
             Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontSize = 16.sp, color = Color.Black)
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 16.sp)
                 Text(subtitle, fontSize = 13.sp, color = Color.Gray)
             }
             trailingText?.let {
-                Text(it, fontSize = 14.sp, color = trailingColor)
+                Text(it, color = trailingColor)
             } ?: Text("→", fontSize = 22.sp, color = Color.Gray)
         }
     }

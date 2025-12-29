@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
@@ -67,9 +66,9 @@ class HomeViewModel : ViewModel() {
 
     private val _cravings = MutableStateFlow(
         listOf(
-            Craving("c1", Instant.now().minus(9, ChronoUnit.DAYS).toEpochMilli(), overcome = true),
-            Craving("c2", Instant.now().minus(6, ChronoUnit.DAYS).toEpochMilli(), overcome = false),
-            Craving("c3", Instant.now().minus(2, ChronoUnit.DAYS).toEpochMilli(), overcome = true)
+            Craving("c1", Instant.now().minus(9, ChronoUnit.DAYS).toEpochMilli(), true),
+            Craving("c2", Instant.now().minus(6, ChronoUnit.DAYS).toEpochMilli(), false),
+            Craving("c3", Instant.now().minus(2, ChronoUnit.DAYS).toEpochMilli(), true)
         )
     )
     val cravings: StateFlow<List<Craving>> = _cravings
@@ -84,87 +83,62 @@ fun HomeScreen(
 ) {
     val user by viewModel.user.collectAsState()
     val streak by viewModel.streak.collectAsState()
-    val cravings by viewModel.cravings.collectAsState()
 
     val daysSinceQuit = remember(user) {
         val quitMillis = user?.quitDateEpochMillis
         val today = LocalDate.now(ZoneId.systemDefault())
         if (quitMillis != null) {
-            val quitDate = Instant.ofEpochMilli(quitMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+            val quitDate = Instant.ofEpochMilli(quitMillis)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
             max(0L, ChronoUnit.DAYS.between(quitDate, today))
         } else 0L
     }
 
-    val cigarettesAvoided = remember(daysSinceQuit, user) {
+    val cigarettesAvoided =
         daysSinceQuit * (user?.cigarettesPerDay?.toLong() ?: 10L)
-    }
-
     val moneySaved = remember(cigarettesAvoided, user) {
         val costPerPack = user?.costPerPack ?: 10.0
-        val saved = (cigarettesAvoided.toDouble() / 20.0) * costPerPack
-        max(0, saved.roundToInt())
-    }
-
-    val cravingsResisted = remember(cravings) {
-        cravings.count { it.overcome }
+        max(0, ((cigarettesAvoided / 20.0) * costPerPack).roundToInt())
     }
 
     Scaffold(
+        containerColor = Color(0xFFF8FAFC),
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            text = "Hello, ${user?.name ?: "Friend"}! 👋",
-                            color = MaterialTheme.colorScheme.onPrimary
+                            "Hello, ${user?.name ?: "Friend"}! 👋",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "You're doing amazing!",
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
-                            style = MaterialTheme.typography.bodySmall
+                            "You're doing amazing!",
+                            color = Color.DarkGray,
+                            fontSize = 12.sp
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigate("profile") }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onPrimary)
+                        Icon(Icons.Default.Menu, contentDescription = null, tint = Color.Black)
                     }
                 },
                 actions = {
                     IconButton(onClick = { navController.navigate("notifications") }) {
-                        BadgedBox(badge = {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.error)
-                            )
-                        }) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                contentDescription = "Notifications",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
+                        Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.Black)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        bottomBar = {
-            HomeBottomNavigation(navController = navController)
-        },
-        modifier = Modifier.fillMaxSize()
+        bottomBar = { HomeBottomNavigation(navController) }
     ) { paddingValues ->
-        val scrollState = rememberScrollState()
-
         Column(
             modifier = Modifier
                 .padding(paddingValues)
-                .verticalScroll(scrollState)
+                .verticalScroll(rememberScrollState())
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
@@ -174,176 +148,160 @@ fun HomeScreen(
             Card(
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF064E3B) // 🌿 Dark Green background
+                ),
+                elevation = CardDefaults.cardElevation(6.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column {
-                            Text("Smoke-free for", style = MaterialTheme.typography.bodySmall)
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(
-                                    "$daysSinceQuit",
-                                    style = MaterialTheme.typography.displaySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("days", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.LocalFireDepartment,
-                                contentDescription = "Flame",
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    HorizontalDivider()
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Cigarettes avoided", style = MaterialTheme.typography.labelSmall)
-                            Text("$cigarettesAvoided", style = MaterialTheme.typography.titleMedium)
+                            Text("Smoke-free for", color = Color(0xFFBBF7D0))
+                            Text(
+                                "$daysSinceQuit days",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
                         }
-                        Column {
-                            Text("Money saved", style = MaterialTheme.typography.labelSmall)
-                            Text("\$${moneySaved}", style = MaterialTheme.typography.titleMedium)
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF065F46)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.LocalFireDepartment,
+                                contentDescription = null,
+                                tint = Color(0xFFFB923C),
+                                modifier = Modifier.size(36.dp)
+                            )
                         }
-                        Column {
-                            Text("Streak", style = MaterialTheme.typography.labelSmall)
-                            Text("${streak} days", style = MaterialTheme.typography.titleMedium)
-                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Divider(color = Color(0xFF15803D))
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        StatItem("Cigarettes avoided", cigarettesAvoided.toInt())
+                        StatItem("Money saved", moneySaved)
+                        StatItem("Streak", streak)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
             /* ---------------- Quick Actions ---------------- */
-            Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Text("Quick Actions", fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
             Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     QuickActionButton(
-                        modifier = Modifier.weight(1f),
-                        label = "Log Craving",
-                        icon = Icons.Default.Place,
-                        onClick = { navController.navigate("craving-alert") }
-                    )
+                        Modifier.weight(1f),
+                        "Log Craving",
+                        Icons.Default.Place
+                    ) { navController.navigate("craving-alert") }
                     QuickActionButton(
-                        modifier = Modifier.weight(1f),
-                        label = "AI Support",
-                        icon = Icons.AutoMirrored.Filled.Message,
-                        onClick = { navController.navigate("ai_chat") }
-                    )
+                        Modifier.weight(1f),
+                        "AI Support",
+                        Icons.AutoMirrored.Filled.Message
+                    ) { navController.navigate("ai_chat") }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     QuickActionButton(
-                        modifier = Modifier.weight(1f),
-                        label = "Craving Predictions",
-                        icon = Icons.AutoMirrored.Filled.TrendingUp,
-                        onClick = { navController.navigate("craving_prediction") }
-                    )
+                        Modifier.weight(1f),
+                        "Craving Predictions",
+                        Icons.AutoMirrored.Filled.TrendingUp
+                    ) { navController.navigate("craving_prediction") }
                     QuickActionButton(
-                        modifier = Modifier.weight(1f),
-                        label = "Daily Progress", // NEW quick action
-                        icon = Icons.Default.Assessment, // <-- replaced Target with Assessment
-                        onClick = { navController.navigate("daily_progress") } // <-- new route
-                    )
+                        Modifier.weight(1f),
+                        "Daily Progress",
+                        Icons.Default.Assessment
+                    ) { navController.navigate("daily_progress") }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-            /* ---------------- Daily Motivation (fixed route) ---------------- */
+            /* ---------------- Daily Motivation ---------------- */
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { navController.navigate("daily_motivation") },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFF0FDF4)
+                ),
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Today's Motivation", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Today's Motivation", color = Color.Gray)
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         "\"Every moment you resist is a victory. Your body is healing right now.\"",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        color = Color.Black
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Tap for more inspiration →", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Tap for more inspiration →", color = Color.Gray, fontSize = 12.sp)
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
             /* ---------------- Today's Goals ---------------- */
             Card(
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFFFFBEB)
+                ),
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Today's Goals", style = MaterialTheme.typography.titleMedium)
+                        Text("Today's Goals", fontWeight = FontWeight.SemiBold)
                         TextButton(onClick = { navController.navigate("todays_goals") }) {
-                            Text("View All", color = MaterialTheme.colorScheme.primary)
+                            Text("View All")
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
+                    Spacer(Modifier.height(8.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GoalRow(text = "Morning breathing exercise", completed = true)
-                        GoalRow(text = "Log afternoon check-in", completed = false)
-                        GoalRow(text = "Evening gratitude journal", completed = false)
+                        GoalRow("Morning breathing exercise", true)
+                        GoalRow("Log afternoon check-in", false)
+                        GoalRow("Evening gratitude journal", false)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
-/* ---------------------- Buttons / Rows ---------------------- */
+/* ---------------------- Components ---------------------- */
+@Composable
+private fun StatItem(label: String, value: Int) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, fontSize = 12.sp, color = Color(0xFFBBF7D0)) // lighter green text
+        Text("$value", fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
 @Composable
 private fun QuickActionButton(
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
@@ -353,55 +311,58 @@ private fun QuickActionButton(
             .height(110.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF8FAFC)
+        ),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(12.dp)
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    .background(Color(0xFFE5E7EB)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    icon,
-                    contentDescription = label,
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Icon(icon, contentDescription = label, tint = Color.Black)
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(label, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            Text(label, fontSize = 13.sp, color = Color.Black)
         }
     }
 }
 
 @Composable
 private fun GoalRow(text: String, completed: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         if (completed) {
             Box(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .background(Color(0xFF10B981)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Check, contentDescription = "done", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
+                )
             }
-            Text(text, style = MaterialTheme.typography.bodyMedium)
         } else {
             Box(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
-                    .border(width = 1.dp, color = MaterialTheme.colorScheme.outline)
+                    .border(1.dp, Color.Gray)
             )
-            Text(text, style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
         }
+        Spacer(Modifier.width(12.dp))
+        Text(text, color = Color.Black)
     }
 }
